@@ -1,9 +1,14 @@
 import joblib
 import pandas as pd
+import os
 
-rf_model = joblib.load('random_forest_model.joblib')
-gb_model = joblib.load('gradient_boosting_model.joblib')
-scaler = joblib.load('scaler.joblib')
+# Get the directory of the current script
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Load models and scaler
+rf_model = joblib.load(os.path.join(current_dir, 'random_forest_model.joblib'))
+gb_model = joblib.load(os.path.join(current_dir, 'gradient_boosting_model.joblib'))
+scaler = joblib.load(os.path.join(current_dir, 'scaler.joblib'))
 
 def prepare_input(data, scaler):
     features = data.drop(columns=['Date', 'Location'], errors='ignore')
