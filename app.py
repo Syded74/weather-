@@ -1,18 +1,30 @@
 from flask import Flask, request, jsonify
-from predict import make_prediction
-import pandas as pd
-import os
+import joblib
 
 app = Flask(__name__)
 
+# Load the models and the scaler
+random_forest_model = joblib.load('random_forest_model.joblib')
+gradient_boosting_model = joblib.load('gradient_boosting_model.joblib')
+scaler = joblib.load('scaler.joblib')
+
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.json
-    df = pd.DataFrame(data)
-    predictions = make_prediction(df)
-    return jsonify({'predictions': predictions.tolist()})
+    # Get data from the request
+    data = request.get_json()
+
+    # Preprocess the input
+    features = data['features']
+    scaled_features = scaler.transform([features])
+
+    # Make predictions using both models
+    rf_prediction = random_forest_model.predict(scaled_features)
+    gb_prediction = gradient_boosting_model.predict(scaled_features)
+
+    return jsonify({
+        'random_forest_prediction': rf_prediction.tolist(),
+        'gradient_boosting_prediction': gb_prediction.tolist()
+    })
 
 if __name__ == '__main__':
-    # DigitalOcean App Platform uses PORT environment variable
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
