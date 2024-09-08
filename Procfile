@@ -1,1 +1,1 @@
-web: gunicorn --chdir /workspace main:app
+web: gunicorn main:app
