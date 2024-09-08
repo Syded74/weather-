@@ -1,0 +1,9 @@
+name: weather-prediction-app
+services:
+  - name: web
+    github:
+      repo: Syded74/weather-
+      branch: main
+    envs:
+      - key: PYTHONUNBUFFERED
+        value: "1"
