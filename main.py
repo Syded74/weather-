@@ -4,13 +4,14 @@ import joblib
 import numpy as np
 import os
 
+from flask import Flask
 app = Flask(__name__)
-logging.basicConfig(level=logging.DEBUG)
+
 
 @app.route('/')
 def hello():
     app.logger.info("Hello route called")
-    return "Hello, World!"
+    return "Weather Prediction App "
 
 # Load models and scaler
 try:
@@ -82,4 +83,4 @@ def predict():
         return jsonify({'error': error_msg}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run()
