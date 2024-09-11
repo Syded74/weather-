@@ -1,88 +1,55 @@
-import logging
 from flask import Flask, request, jsonify
 import joblib
+import pandas as pd
 import numpy as np
-import os
+from sklearn.preprocessing import StandardScaler
 
-
+# Initialize Flask app
 app = Flask(__name__)
 
+# Load the trained Random Forest model and Scaler
+model = joblib.load('random_forest_model.joblib')
+scaler = joblib.load('scaler.joblib')
 
-@app.route('/')
-def hello():
-    app.logger.info("Hello route called")
-    return "Weather Prediction App "
+# Define the features used by the model
+features = ['Year', 'Month', 'Day', 'Min_Temp', 'Rainfall', 'Humidity', 'Wind_Direction', 'Wind_Speed', 'timestamp', 'Latitude', 'Longitude', 'Cluster']
 
-# Load models and scaler
-try:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    random_forest_model = joblib.load(os.path.join(current_dir, 'random_forest_model.joblib'))
-    gradient_boosting_model = joblib.load(os.path.join(current_dir, 'gradient_boosting_model.joblib'))
-    scaler = joblib.load(os.path.join(current_dir, 'scaler.joblib'))
-    app.logger.info("Models loaded successfully")
-except Exception as e:
-    app.logger.error(f"Error loading models: {str(e)}")
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    app.logger.info("Predict route called")
-    # Get the data from the request
-    data = request.get_json()
-    app.logger.debug(f"Received data: {data}")
-
-    # Extract the features from the data
+# Prediction route for bulk data
+@app.route('/predict-bulk', methods=['POST'])
+def predict_bulk():
     try:
-        features = []
-        for entry in data['features']:
-            feature_row = [
-                float(entry['Year']),
-                float(entry['Month']),
-                float(entry['Day']),
-                float(entry['Min_Temp']),
-                float(entry['Rainfall']),
-                float(entry['Humidity']),
-                float(entry['Wind_Direction']),
-                float(entry['Wind_Speed']),
-                float(entry['timestamp']),  # Ensure timestamp is included
-                float(entry['Latitude']),
-                float(entry['Longitude']),
-                float(entry['Cluster'])
-            ]
-            features.append(feature_row)
+        # Get data from the POST request (it should be a list of records)
+        data = request.get_json()
 
-        # Convert the list of features into a numpy array
-        features = np.array(features)
-        app.logger.debug(f"Processed features shape: {features.shape}")
+        # Validate that data is a list of dictionaries
+        if not isinstance(data, list):
+            return jsonify({'error': 'Input data should be a list of dictionaries'}), 400
 
-        # Scale the features
-        scaled_features = scaler.transform(features)
-        app.logger.debug(f"Scaled features shape: {scaled_features.shape}")
+        # Prepare input data for prediction
+        input_df = pd.DataFrame(data)
 
-        # Make predictions using both models
-        rf_prediction = random_forest_model.predict(scaled_features)
-        gb_prediction = gradient_boosting_model.predict(scaled_features)
+        # Ensure all required features are present (excluding 'timestamp' which will be added)
+        if not all(col in input_df.columns for col in features if col != 'timestamp'):
+            return jsonify({'error': 'Missing required features in some data entries'}), 400
 
-        # Combine the predictions
-        final_predictions = rf_prediction + gb_prediction
-        app.logger.info(f"Predictions made successfully. Shape: {final_predictions.shape}")
+        # Calculate 'timestamp' for each row
+        input_df['timestamp'] = input_df.apply(lambda row: pd.Timestamp(row['Year'], row['Month'], row['Day']).timestamp(), axis=1)
 
-        # Return the predictions as a JSON response
-        return jsonify({'Predicted_Max_Temp': final_predictions.tolist()})
+        # Scale the input features
+        X_scaled = scaler.transform(input_df[features])
 
-    except KeyError as ke:
-        error_msg = f"Missing key in input data: {str(ke)}"
-        app.logger.error(error_msg)
-        return jsonify({'error': error_msg}), 400
-    except ValueError as ve:
-        error_msg = f"Invalid value in input data: {str(ve)}"
-        app.logger.error(error_msg)
-        return jsonify({'error': error_msg}), 400
+        # Predict using the Random Forest model
+        predictions = model.predict(X_scaled)
+
+        # Return the predictions for all input rows
+        input_df['predicted_temperature'] = predictions
+        result = input_df[['Year', 'Month', 'Day', 'Latitude', 'Longitude', 'predicted_temperature']].to_dict(orient='records')
+
+        return jsonify(result)
+
     except Exception as e:
-        error_msg = f"An unexpected error occurred: {str(e)}"
-        app.logger.error(error_msg)
-        return jsonify({'error': error_msg}), 500
+        return jsonify({'error': str(e)}), 500
 
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+# Run the Flask app
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

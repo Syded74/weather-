@@ -1,22 +1,30 @@
-import joblib
-import pandas as pd
-import os
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        # Get data from POST request (it should be an array of input data)
+        data = request.get_json()
 
-# Get the directory of the current script
-current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Validate that data is a list of dictionaries
+        if not isinstance(data, list):
+            return jsonify({'error': 'Input data should be a list of dictionaries'}), 400
 
-# Load models and scaler
-rf_model = joblib.load(os.path.join(current_dir, 'random_forest_model.joblib'))
-gb_model = joblib.load(os.path.join(current_dir, 'gradient_boosting_model.joblib'))
-scaler = joblib.load(os.path.join(current_dir, 'scaler.joblib'))
+        # Prepare input data for prediction
+        input_df = pd.DataFrame(data)
 
-def prepare_input(data, scaler):
-    features = data.drop(columns=['Date', 'Location'], errors='ignore')
-    scaled_features = scaler.transform(features)
-    return scaled_features
+        # Ensure all required features are present
+        if not all(col in input_df.columns for col in features):
+            return jsonify({'error': 'Missing required features in some data entries'}), 400
 
-def make_prediction(data):
-    X = prepare_input(data, scaler)
-    rf_pred = rf_model.predict(X)
-    gb_pred = gb_model.predict(X)
-    return rf_pred + gb_pred
+        # Scale the input features
+        X_scaled = scaler.transform(input_df[features])
+
+        # Predict using the Random Forest model
+        predictions = model.predict(X_scaled)
+
+        # Return the predictions for all input rows
+        return jsonify({
+            'predictions': predictions.tolist()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
